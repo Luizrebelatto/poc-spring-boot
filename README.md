@@ -21,7 +21,16 @@ password: admin
 ## Prometheus
 <img width="1624" alt="Screenshot 2025-05-20 at 22 08 45" src="https://github.com/user-attachments/assets/8ee881a5-9bd4-4112-8167-475ba54fc754" />
 
-## Grafana
+## Grafana Templantes
 - Micrometer
-https://github.com/user-attachments/assets/53839641-81ea-4bb8-ac62-9ab3cb5bce07
+
+https://github.com/user-attachments/assets/20b03a19-3734-4051-8404-b62c2395acee
+
+- Spring boot
+
+https://github.com/user-attachments/assets/7b6da353-2615-4b73-83e7-e6f49e35b74c
+
+
+
+
 
