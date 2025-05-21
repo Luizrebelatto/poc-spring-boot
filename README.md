@@ -1,24 +1,17 @@
 # Api Spring Boot
 
-# Routes
-- GET `/api/hello`
+## How to run
+1. Open intellij
+2. Run api and access `http://localhost:8080`
+3. Run docker `docker-compose up`
 
-# Actuator
-```
-{
-  "_links": {
-    "self": {
-      "href": "http://localhost:8080/actuator",
-      "templated": false
-    },
-    "health-path": {
-      "href": "http://localhost:8080/actuator/health/{*path}",
-      "templated": true
-    },
-    "health": {
-      "href": "http://localhost:8080/actuator/health",
-      "templated": false
-    }
-  }
-}
-```
+# Routes
+- GET `http://localhost:8080/api/hello`
+- Actuator `http://localhost:8080/actutuator`
+- Prometheus `http://localhost:9090/query`
+
+## Actuator
+<img width="812" alt="Screenshot 2025-05-20 at 22 09 09" src="https://github.com/user-attachments/assets/00902ffe-e7bb-4196-871d-48a37db07bf7" />
+
+## Prometheus
+<img width="1624" alt="Screenshot 2025-05-20 at 22 08 45" src="https://github.com/user-attachments/assets/8ee881a5-9bd4-4112-8167-475ba54fc754" />
