@@ -30,6 +30,19 @@ https://github.com/user-attachments/assets/20b03a19-3734-4051-8404-b62c2395acee
 
 https://github.com/user-attachments/assets/7b6da353-2615-4b73-83e7-e6f49e35b74c
 
+# Desenvolvimento
+./gradlew bootRun
+
+# Build completo
+./gradlew build
+
+# Docker
+docker build -t poc-spring-boot:latest .
+docker run -p 8080:8080 poc-spring-boot:latest
+
+# Kubernetes
+helm install poc-spring-boot ./helm/poc-spring-boot
+
 
 
 
