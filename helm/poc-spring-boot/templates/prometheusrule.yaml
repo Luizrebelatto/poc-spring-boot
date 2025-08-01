@@ -1,0 +1,31 @@
+{{- if .Values.monitoring.enabled }}
+{{- if .Values.monitoring.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "poc-spring-boot.fullname" . }}-rules
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "poc-spring-boot.labels" . | nindent 4 }}
+    release: {{ .Release.Name }}
+spec:
+  groups:
+    - name: {{ include "poc-spring-boot.fullname" . }}.rules
+      rules:
+        {{- range .Values.monitoring.prometheusRule.rules }}
+        - alert: {{ .alert }}
+          expr: {{ .expr }}
+          {{- if .for }}
+          for: {{ .for }}
+          {{- end }}
+          {{- if .labels }}
+          labels:
+            {{- toYaml .labels | nindent 12 }}
+          {{- end }}
+          {{- if .annotations }}
+          annotations:
+            {{- toYaml .annotations | nindent 12 }}
+          {{- end }}
+        {{- end }}
+{{- end }}
+{{- end }} 

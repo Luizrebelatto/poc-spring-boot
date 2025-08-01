@@ -4,6 +4,10 @@ metadata:
   name: {{ include "poc-spring-boot.fullname" . }}
   labels:
     {{- include "poc-spring-boot.labels" . | nindent 4 }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/actuator/prometheus"
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
@@ -13,40 +17,68 @@ spec:
       {{- include "poc-spring-boot.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
-      annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       labels:
         {{- include "poc-spring-boot.selectorLabels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ include "poc-spring-boot.serviceAccountName" . }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
               containerPort: 8080
               protocol: TCP
           livenessProbe:
             httpGet:
               path: /actuator/health
               port: http
+            initialDelaySeconds: 60
+            periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /actuator/health
               port: http
+            initialDelaySeconds: 30
+            periodSeconds: 5
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.env }}
+          env:
+            {{- range .Values.env }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.configMap.enabled }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config
+          {{- end }}
+          {{- if .Values.persistence.enabled }}
+            - name: logs-volume
+              mountPath: /app/logs
+          {{- end }}
+      {{- if .Values.configMap.enabled }}
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "poc-spring-boot.fullname" . }}-config
+      {{- end }}
+      {{- if .Values.persistence.enabled }}
+        - name: logs-volume
+          persistentVolumeClaim:
+            claimName: {{ include "poc-spring-boot.fullname" . }}-logs
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

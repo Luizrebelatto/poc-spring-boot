@@ -1,181 +1,427 @@
-# Processo de Build da Aplicação Spring Boot
+# Complete CI/CD Flow Documentation
 
-## 🔄 Fluxo Completo do Build
+This document describes the complete CI/CD pipeline implementation using Jenkins, Helm, OpenTofu, Kubernetes (Minikube), Prometheus, and Grafana.
 
-```mermaid
-graph TD
-    A[Código Fonte] --> B[Gradle Build]
-    B --> C[Compilação Java]
-    C --> D[Download Dependencies]
-    D --> E[Executa Testes]
-    E --> F[Gera JAR]
-    F --> G[Docker Build]
-    G --> H[Imagem Docker]
-    H --> I[Kubernetes Deploy]
-    
-    subgraph "Gradle Build"
-        B1[Compila .java → .class]
-        B2[Resolve Dependencies]
-        B3[Executa Testes]
-        B4[Empacota JAR]
-    end
-    
-    subgraph "Docker Build"
-        G1[Copia JAR]
-        G2[Define Entrypoint]
-        G3[Cria Imagem]
-    end
+## 🏗️ Architecture Overview
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   Jenkins   │───▶│    Docker   │───▶│   Helm      │───▶│ Kubernetes  │
+│   Pipeline  │    │   Registry  │    │   Charts    │    │  (Minikube) │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+                                                              │
+                                                              ▼
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  OpenTofu   │◀───│  Prometheus │◀───│   Grafana   │◀───│  Monitoring │
+│Infrastructure│    │   Metrics   │    │  Dashboard  │    │    Stack    │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
-## 📋 Passo a Passo Detalhado
+## 🔄 CI/CD Pipeline Flow
 
-### 1. **Gradle Build** (`./gradlew build`)
+### 1. Jenkins Pipeline Stages
 
+#### Stage 1: Checkout
+- Clones the source code from Git repository
+- Sets up the workspace for the build
+
+#### Stage 2: Build
+- Runs `./gradlew clean build`
+- Compiles the Spring Boot application
+- Runs unit tests
+- Generates JAR artifacts
+
+#### Stage 3: Test
+- Executes all tests with `./gradlew test`
+- Publishes test results to Jenkins
+- Generates test reports
+
+#### Stage 4: SonarQube Analysis
+- Performs code quality analysis
+- Checks for code smells, bugs, and vulnerabilities
+- Generates quality reports
+
+#### Stage 5: Build Docker Image
+- Builds Docker image with application
+- Tags image with build number
+- Pushes to Docker registry
+
+#### Stage 6: Setup Kubernetes Cluster
+- Starts Minikube cluster if not running
+- Enables required addons (ingress, metrics-server)
+- Configures kubectl context
+
+#### Stage 7: Deploy Monitoring Stack
+- Deploys Prometheus and Grafana using Helm
+- Configures ServiceMonitors for application monitoring
+- Sets up alerting rules
+
+#### Stage 8: Deploy Application with Helm
+- Updates Helm values with new image tag
+- Deploys application using Helm charts
+- Configures NodePort service for external access
+
+#### Stage 9: Infrastructure as Code with OpenTofu
+- Initializes OpenTofu configuration
+- Plans infrastructure changes
+- Applies infrastructure configuration
+
+#### Stage 10: Health Check
+- Waits for deployment to be ready
+- Tests application endpoints
+- Verifies monitoring endpoints
+
+#### Stage 11: Performance Test
+- Runs basic load tests
+- Validates application performance
+
+### 2. Helm Deployment Process
+
+#### Pre-deployment
+1. **Chart Preparation**
+   - Updates `values.yaml` with new image tag
+   - Configures monitoring annotations
+   - Sets up resource limits and requests
+
+2. **Infrastructure Setup**
+   - Creates namespaces (application, monitoring)
+   - Sets up RBAC (ServiceAccount, ClusterRole)
+   - Configures ConfigMaps and PersistentVolumeClaims
+
+#### Deployment
+1. **Application Deployment**
+   ```bash
+   helm upgrade --install poc-spring-boot helm/poc-spring-boot \
+       --namespace default \
+       --set image.tag=${DOCKER_TAG} \
+       --set service.type=NodePort \
+       --set service.nodePort=30001
+   ```
+
+2. **Monitoring Configuration**
+   - ServiceMonitor for Prometheus scraping
+   - PrometheusRule for alerting
+   - Ingress for external access
+
+### 3. OpenTofu Infrastructure Management
+
+#### Infrastructure Components
+1. **Namespaces**
+   - Application namespace (`poc-spring-boot`)
+   - Monitoring namespace (`monitoring`)
+
+2. **RBAC Configuration**
+   - ServiceAccount for application
+   - ClusterRole for monitoring access
+   - ClusterRoleBinding for permissions
+
+3. **Application Configuration**
+   - ConfigMap with application properties
+   - Environment variables for monitoring
+
+4. **Monitoring Setup**
+   - ServiceMonitor for Prometheus
+   - PrometheusRule for alerting
+   - Ingress configuration
+
+#### OpenTofu Commands
 ```bash
-# O que acontece internamente:
-./gradlew build
+# Initialize
+tofu init
+
+# Plan changes
+tofu plan -out=tfplan
+
+# Apply changes
+tofu apply tfplan
+
+# Destroy resources
+tofu destroy
 ```
 
-**Etapas do Gradle:**
-1. **Compilação**: `.java` → `.class`
-2. **Download Dependencies**: Maven Central
-3. **Testes**: JUnit 5
-4. **Empacotamento**: JAR executável
+### 4. Monitoring Stack
 
-**Dependencies baixadas:**
-- `spring-boot-starter-web` (Web + Tomcat)
-- `spring-boot-starter-actuator` (Health + Metrics)
-- `spring-boot-starter-test` (JUnit + Mockito)
-- `micrometer-registry-prometheus` (Métricas)
+#### Prometheus Configuration
+- **Scraping**: Automatically discovers and scrapes application metrics
+- **Metrics**: Collects JVM, HTTP, and system metrics
+- **Storage**: Time-series database for metrics storage
+- **Alerting**: Rules for CPU, memory, and application health
 
-### 2. **Arquivo JAR Gerado**
+#### Grafana Configuration
+- **Dashboards**: Pre-configured dashboards for application metrics
+- **Data Sources**: Prometheus as primary data source
+- **Alerts**: Visual alerting and notifications
+- **Users**: Admin user with default credentials (admin/admin)
 
-**Localização:** `build/libs/poc-spring-boot-0.0.1-SNAPSHOT.jar`
+#### Application Metrics
+- **HTTP Metrics**: Request rate, response time, error rate
+- **JVM Metrics**: Memory usage, GC statistics, thread count
+- **System Metrics**: CPU usage, memory usage, disk I/O
+- **Custom Metrics**: Business-specific metrics
 
-**Conteúdo do JAR:**
-```
-poc-spring-boot-0.0.1-SNAPSHOT.jar
-├── META-INF/
-│   ├── MANIFEST.MF
-│   └── maven/
-├── BOOT-INF/
-│   ├── classes/          # Seus .class files
-│   ├── lib/             # Dependencies
-│   └── classpath.idx
-└── org/springframework/boot/loader/
-```
+### 5. Kubernetes Cluster (Minikube)
 
-### 3. **Docker Build**
+#### Cluster Configuration
+- **Profile**: `poc-cluster`
+- **Driver**: Docker
+- **Resources**: 2 CPUs, 4GB RAM
+- **Addons**: Ingress, Metrics Server, Dashboard
 
-```dockerfile
-FROM openjdk:17-jdk-slim    # Imagem base Java 17
-WORKDIR /app                # Define diretório de trabalho
-COPY build/libs/*.jar app.jar  # Copia o JAR
-EXPOSE 8080                 # Expõe porta
-ENTRYPOINT ["java", "-jar", "app.jar"]  # Comando de execução
-```
+#### Service Configuration
+- **Type**: NodePort for external access
+- **Ports**: 8080 (application), 30001 (external)
+- **Annotations**: Prometheus scraping configuration
 
-**Comando Docker:**
+#### Ingress Configuration
+- **Class**: nginx
+- **Host**: poc-spring-boot.local
+- **Paths**: Root path for application access
+
+## 🛠️ Tools and Technologies
+
+### 1. Jenkins
+- **Purpose**: CI/CD pipeline orchestration
+- **Features**: Multi-stage pipeline, artifact management, test reporting
+- **Plugins**: Docker, Kubernetes, SonarQube, Test Results
+
+### 2. Helm
+- **Purpose**: Kubernetes package manager
+- **Features**: Chart templating, value management, release management
+- **Charts**: Application deployment, monitoring stack
+
+### 3. OpenTofu
+- **Purpose**: Infrastructure as Code
+- **Features**: Resource management, state management, planning
+- **Providers**: Kubernetes, Helm
+
+### 4. Kubernetes (Minikube)
+- **Purpose**: Container orchestration
+- **Features**: Pod management, service discovery, load balancing
+- **Components**: API Server, Scheduler, Controller Manager
+
+### 5. Prometheus
+- **Purpose**: Metrics collection and monitoring
+- **Features**: Time-series database, alerting, service discovery
+- **Metrics**: Application, system, and custom metrics
+
+### 6. Grafana
+- **Purpose**: Metrics visualization and alerting
+- **Features**: Dashboards, alerting, user management
+- **Data Sources**: Prometheus, other time-series databases
+
+## 📊 Monitoring and Observability
+
+### Metrics Collection
+1. **Application Metrics**
+   - HTTP request rate and response time
+   - Error rates and status codes
+   - Business-specific metrics
+
+2. **JVM Metrics**
+   - Memory usage (heap, non-heap)
+   - Garbage collection statistics
+   - Thread count and status
+
+3. **System Metrics**
+   - CPU usage and load
+   - Memory usage and availability
+   - Disk I/O and network statistics
+
+### Alerting Rules
+1. **High CPU Usage**
+   - Threshold: >80% for 5 minutes
+   - Severity: Warning
+   - Action: Scale up or investigate
+
+2. **High Memory Usage**
+   - Threshold: >80% for 5 minutes
+   - Severity: Warning
+   - Action: Increase memory or optimize
+
+3. **Application Health**
+   - Threshold: Health check failure
+   - Severity: Critical
+   - Action: Restart or rollback
+
+### Dashboards
+1. **Application Dashboard**
+   - Request rate and response time
+   - Error rates and status codes
+   - JVM memory and GC statistics
+
+2. **System Dashboard**
+   - CPU and memory usage
+   - Network and disk I/O
+   - Pod and container metrics
+
+3. **Kubernetes Dashboard**
+   - Cluster resource usage
+   - Pod and service status
+   - Node health and capacity
+
+## 🔧 Configuration Files
+
+### 1. Jenkinsfile
+- Complete CI/CD pipeline definition
+- Multi-stage build process
+- Integration with all tools
+
+### 2. Helm Charts
+- `values.yaml`: Application configuration
+- `deployment.yaml`: Pod and container configuration
+- `service.yaml`: Service and networking
+- `ingress.yaml`: External access configuration
+- `servicemonitor.yaml`: Prometheus monitoring
+- `prometheusrule.yaml`: Alerting rules
+
+### 3. OpenTofu Configuration
+- `main.tf`: Infrastructure resources
+- `variables.tf`: Input variables
+- `outputs.tf`: Output values
+
+### 4. Monitoring Configuration
+- `prometheus.yml`: Prometheus configuration
+- `grafana-dashboard.json`: Dashboard definition
+
+## 🚀 Deployment Process
+
+### Automated Deployment
+1. **Run Setup Script**
+   ```bash
+   ./setup.sh
+   ```
+
+2. **Manual Deployment**
+   ```bash
+   # Start Minikube
+   minikube start --profile=poc-cluster
+   
+   # Deploy monitoring
+   helm upgrade --install prometheus prometheus-community/kube-prometheus-stack
+   
+   # Deploy application
+   helm upgrade --install poc-spring-boot helm/poc-spring-boot
+   
+   # Apply infrastructure
+   cd infrastructure && tofu apply
+   ```
+
+### Verification Steps
+1. **Check Pod Status**
+   ```bash
+   kubectl get pods
+   ```
+
+2. **Test Application**
+   ```bash
+   curl http://$(minikube ip):30001/hello
+   ```
+
+3. **Access Monitoring**
+   ```bash
+   # Grafana
+   open http://$(minikube ip):30000
+   
+   # Kubernetes Dashboard
+   minikube dashboard --profile=poc-cluster
+   ```
+
+## 🔍 Troubleshooting
+
+### Common Issues
+1. **Minikube Not Starting**
+   - Check Docker is running
+   - Verify system resources
+   - Delete and recreate cluster
+
+2. **Application Not Accessible**
+   - Check pod status
+   - Verify service configuration
+   - Check ingress configuration
+
+3. **Monitoring Not Working**
+   - Verify ServiceMonitor configuration
+   - Check Prometheus targets
+   - Validate metrics endpoints
+
+### Debug Commands
 ```bash
-docker build -t poc-spring-boot:latest .
+# Check pod logs
+kubectl logs -f deployment/poc-spring-boot
+
+# Check service endpoints
+kubectl get endpoints
+
+# Check ingress status
+kubectl get ingress
+
+# Check monitoring targets
+kubectl port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090 -n monitoring
 ```
 
-### 4. **Imagem Docker Resultante**
+## 📈 Performance Optimization
 
-**Estrutura da Imagem:**
-```
-poc-spring-boot:latest
-├── openjdk:17-jdk-slim (base)
-├── /app/
-│   └── app.jar (seu JAR)
-└── java -jar app.jar (entrypoint)
-```
+### Resource Management
+1. **CPU and Memory Limits**
+   - Set appropriate resource requests and limits
+   - Monitor resource usage
+   - Scale based on demand
 
-## 🛠 Configurações do Build
+2. **Horizontal Pod Autoscaling**
+   - Configure HPA for automatic scaling
+   - Set CPU and memory thresholds
+   - Monitor scaling events
 
-### **build.gradle**
-```gradle
-plugins {
-    id 'java'                                    // Plugin Java
-    id 'org.springframework.boot' version '3.4.5'  // Plugin Spring Boot
-    id 'io.spring.dependency-management' version '1.1.7'  // Gerenciamento de dependências
-}
+3. **Monitoring Optimization**
+   - Configure appropriate scrape intervals
+   - Set up metric retention policies
+   - Optimize alerting rules
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)  // Java 17
-    }
-}
+### Best Practices
+1. **Security**
+   - Use RBAC for access control
+   - Implement network policies
+   - Secure secrets management
 
-dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-web'  // Web + Tomcat
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'  // Health + Metrics
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'  // Testes
-    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'  // Métricas Prometheus
-}
-```
+2. **Reliability**
+   - Implement health checks
+   - Set up proper restart policies
+   - Configure resource limits
 
-## 🚀 Como Executar
+3. **Observability**
+   - Comprehensive logging
+   - Structured metrics
+   - Effective alerting
 
-### **Local (Desenvolvimento):**
-```bash
-./gradlew bootRun
-```
+## 🧹 Cleanup and Maintenance
 
-### **Build + Test:**
-```bash
-./gradlew build
-```
+### Regular Maintenance
+1. **Resource Cleanup**
+   ```bash
+   # Remove Helm releases
+   helm uninstall poc-spring-boot
+   helm uninstall prometheus -n monitoring
+   
+   # Remove OpenTofu resources
+   cd infrastructure && tofu destroy
+   ```
 
-### **Docker:**
-```bash
-./gradlew build
-docker build -t poc-spring-boot:latest .
-docker run -p 8080:8080 poc-spring-boot:latest
-```
+2. **Cluster Management**
+   ```bash
+   # Stop cluster
+   minikube stop --profile=poc-cluster
+   
+   # Delete cluster
+   minikube delete --profile=poc-cluster
+   ```
 
-### **Kubernetes (Helm):**
-```bash
-./gradlew build
-docker build -t poc-spring-boot:latest .
-helm install poc-spring-boot ./helm/poc-spring-boot
-```
+3. **Docker Cleanup**
+   ```bash
+   # Remove unused images
+   docker system prune -a
+   
+   # Remove unused volumes
+   docker volume prune
+   ```
 
-## 📊 Output do Build
-
-### **Arquivos Gerados:**
-- `build/libs/poc-spring-boot-0.0.1-SNAPSHOT.jar` - JAR executável
-- `build/classes/` - Arquivos compilados
-- `build/reports/tests/` - Relatórios de teste
-- `build/test-results/` - Resultados dos testes
-
-### **Logs do Build:**
-```
-> Task :compileJava
-> Task :processResources
-> Task :classes
-> Task :jar
-> Task :bootJar
-> Task :assemble
-> Task :compileTestJava
-> Task :processTestResources
-> Task :testClasses
-> Task :test
-> Task :check
-> Task :build
-```
-
-## 🔍 Pontos Importantes
-
-1. **JAR Executável**: Spring Boot cria um JAR "fat" com todas as dependências
-2. **Tomcat Embarcado**: Incluído no JAR, não precisa de servidor externo
-3. **Actuator**: Endpoints de health e métricas automáticos
-4. **Java 17**: Versão LTS moderna
-5. **Gradle**: Build tool rápido e flexível
-
-## ⚡ Otimizações Possíveis
-
-- **Multi-stage Docker**: Reduzir tamanho da imagem
-- **Gradle Cache**: Acelerar builds subsequentes
-- **Testes Paralelos**: Executar testes em paralelo
-- **Docker Layer Caching**: Reutilizar camadas Docker 
+This complete CI/CD flow provides a production-ready setup for Spring Boot applications with comprehensive monitoring, infrastructure as code, and automated deployment processes. 

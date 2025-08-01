@@ -1,12 +1,30 @@
-replicaCount: 1
+replicaCount: 2
 
 image:
   repository: poc-spring-boot
   tag: "latest"
+  pullPolicy: IfNotPresent
 
 service:
-  type: ClusterIP
+  type: NodePort
   port: 8080
+  nodePort: 30001
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/actuator/prometheus"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    - host: poc-spring-boot.local
+      paths:
+        - path: /
+          pathType: Prefix
 
 resources:
   limits:
@@ -17,13 +35,70 @@ resources:
     memory: 256Mi
 
 autoscaling:
-  enabled: false
+  enabled: true
   minReplicas: 1
-  maxReplicas: 100
+  maxReplicas: 5
   targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /actuator/prometheus
+  prometheusRule:
+    enabled: true
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
 
 nodeSelector: {}
 
 tolerations: []
 
-affinity: {} 
+affinity: {}
+
+serviceAccount:
+  create: true
+  name: "poc-spring-boot-sa"
+  annotations: {}
+
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 1Gi
+
+env:
+  - name: SPRING_PROFILES_ACTIVE
+    value: "kubernetes"
+  - name: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+    value: "health,info,metrics,prometheus"
+  - name: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
+    value: "always"
+  - name: MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED
+    value: "true"
+
+configMap:
+  enabled: true
+  data:
+    application.properties: |
+      server.port=8080
+      management.endpoints.web.exposure.include=health,info,metrics,prometheus
+      management.endpoint.health.show-details=always
+      management.metrics.export.prometheus.enabled=true
+      logging.level.com.example.pocspringboot=INFO
+      logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss} - %msg%n 
