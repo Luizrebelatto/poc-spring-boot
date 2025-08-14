@@ -8,4 +8,23 @@
 - api java with spring boot
 
 
-<img width="932" height="468" alt="Screenshot 2025-08-12 at 23 03 24" src="https://github.com/user-attachments/assets/a1fda89c-8606-4c3a-a9c5-753b4247e451" />
+## Grafana
+- Ferramenta open-source de observalidade para visualizacao de dados, conecta a base de dados e exibe as metricas em dashs interativos
+- resolve o problema da centralizacao de dados, cruzamento de dados, monitoramento em tempo real
+
+## Prometheus
+- Ferramenta open source de monitoramento e coleta de dados
+- enviar dados para o grafana
+- coleta metricas periodicamente
+
+## Helm Chart
+- gerenciador de pacotes
+- evitar criar as ferramentas do zero, por exemplo para utilizar o grafana, instale o package assim sera mais facil de manter
+- variaveis de personalizacao
+- facil upgrade e rollback
+
+## Open Tofu
+- Open tofu é uma alternativa open source do terraform
+- configuracoes
+- define recursos de nuvem
+- cria e atualiza infra
